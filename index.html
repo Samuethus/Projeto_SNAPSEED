@@ -272,6 +272,13 @@ body.no-image .panel-body { opacity: .45; pointer-events: none; }
 .sl-top output { color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
 .sl.changed .sl-top output { color: var(--royal-light); font-weight: 600; }
 .sl-val { display: inline-flex; align-items: center; gap: 2px; }
+[data-range-row] output { cursor: text; border-radius: 5px; padding: 1px 5px; transition: background .15s, color .15s; }
+[data-range-row] output:hover, [data-range-row] output:focus-visible { background: var(--surface-3); color: #fff; }
+.val-edit {
+  width: 56px; height: 22px; padding: 0 6px; border-radius: 6px; outline: none; text-align: right;
+  border: 1px solid var(--royal); background: var(--bg-2); color: #fff; box-shadow: 0 0 0 3px var(--royal-soft);
+  font: 600 12.5px Inter, sans-serif; font-variant-numeric: tabular-nums;
+}
 .rst {
   width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center;
   color: var(--text-2); transition: background .15s, color .15s, opacity .15s;
@@ -1922,6 +1929,65 @@ function bindSliderHelpers() {
     const row = e.target.closest && e.target.closest('[data-range-row]');
     if (row) updateResets(row);
   });
+
+  // Valor digitável: clique (ou Enter) no número abre um campo de edição
+  for (const out of $$('[data-range-row] output')) {
+    out.tabIndex = 0;
+    out.setAttribute('role', 'button');
+    out.title = 'Clique para digitar um valor';
+  }
+  document.addEventListener('click', e => {
+    const out = e.target.closest('[data-range-row] output');
+    if (out) editValue(out);
+  });
+  document.addEventListener('keydown', e => {
+    const out = e.target.closest && e.target.closest('[data-range-row] output');
+    if (out && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); editValue(out); }
+  }, true);
+}
+function editValue(out) {
+  const range = out.closest('[data-range-row]').querySelector('input[type=range]');
+  if (!S.img || range.disabled || out.hidden) return;
+  const ed = document.createElement('input');
+  ed.type = 'text';
+  ed.className = 'val-edit';
+  ed.inputMode = 'decimal';
+  ed.setAttribute('aria-label', `Valor (${range.min} a ${range.max})`);
+  ed.value = String(+range.value).replace('.', ',');
+  out.hidden = true;
+  out.after(ed);
+  ed.focus();
+  ed.select();
+  let done = false;
+  const finish = apply => {
+    if (done) return;
+    done = true;
+    const v = parseFloat(ed.value.replace(',', '.').replace(/[^\d.+-]/g, ''));
+    ed.remove();
+    out.hidden = false;
+    if (apply && Number.isFinite(v)) {
+      const step = +range.step || 1;
+      const nv = +clamp(Math.round(v / step) * step, +range.min, +range.max).toFixed(2);
+      if (nv !== +range.value) {
+        range.value = nv;
+        range.dispatchEvent(new Event('input', { bubbles: true }));
+        range.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    out.focus();
+  };
+  ed.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const step = (+range.step || 1) * (e.shiftKey ? 10 : 1) * (e.key === 'ArrowUp' ? 1 : -1);
+      const cur = parseFloat(ed.value.replace(',', '.')) || 0;
+      ed.value = String(+clamp(cur + step, +range.min, +range.max).toFixed(2)).replace('.', ',');
+    }
+  });
+  ed.addEventListener('blur', () => finish(true));
 }
 function updateResets(root = document) {
   for (const btn of $$('.rst', root)) {
@@ -1993,7 +2059,7 @@ function bindEvents() {
   panelBody.addEventListener('change', e => { if (e.target.closest('.sl[data-group]')) { commit(); syncSliders(); } });
   panelBody.addEventListener('dblclick', e => {
     const row = e.target.closest('.sl[data-group]');
-    if (!row) return;
+    if (!row || e.target.type !== 'range') return;
     S.params[row.dataset.group][row.dataset.key] = 0;
     commit(); syncSliders(); requestRender();
   });
