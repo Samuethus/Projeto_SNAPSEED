@@ -344,6 +344,8 @@ input[type=range]:disabled { opacity: .35; cursor: not-allowed; }
 /* Chips / ratios */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips.cols-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chips.cols-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.chips.cols-4 .chip { padding: 6px 2px; }
 .chips.cols-6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
 .chips.cols-6 .chip { padding: 7px 0; font-size: 11.5px; }
 .chip {
@@ -663,7 +665,7 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
               <span class="sl-val"><output id="qOut">90</output><button class="rst" data-default="90" title="Redefinir qualidade" aria-label="Redefinir qualidade"><i data-icon="reset"></i></button></span>
             </div>
             <input type="range" class="fill" id="quality" min="10" max="100" step="1" value="90">
-            <div class="chips cols-3" id="qChips" style="margin-top:8px"></div>
+            <div class="chips cols-4" id="qChips" style="margin-top:8px"></div>
           </div>
           <div class="card" id="bgCard">
             <div class="row-between"><span>Fundo para áreas transparentes</span><input type="color" id="bgColor" value="#ffffff"></div>
@@ -678,10 +680,18 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
               <span class="input-wrap text"><input type="text" id="fileName" spellcheck="false"><em id="extLabel">.jpg</em></span>
             </label>
           </div>
+          <div class="card" id="saveQCard" data-range-row>
+            <div class="card-head"><h3>Padrão de geração</h3>
+              <span class="sl-val"><output id="sqOut">90</output><button class="rst" data-default="90" title="Redefinir para 90%" aria-label="Redefinir para 90%"><i data-icon="reset"></i></button></span>
+            </div>
+            <div class="chips cols-4" id="sqChips"></div>
+            <input type="range" class="fill" id="saveQuality" min="10" max="100" step="1" value="90" aria-label="Qualidade de geração" style="margin-top:6px">
+            <p class="hint" id="sqNote" hidden>PNG é sem perdas — a qualidade não se aplica.</p>
+          </div>
           <div class="card">
             <div class="stat-row"><span>Dimensões</span><b id="sumDims">—</b></div>
-            <div class="stat-row"><span>Formato</span><b id="sumFmt">—</b></div>
-            <div class="stat-row"><span>Qualidade</span><b id="sumQ">—</b></div>
+            <div class="stat-row"><span>Formato · qualidade</span><b id="sumFmt">—</b></div>
+            <div class="stat-row"><span>Arquivo original</span><b id="sumOrig">—</b></div>
             <div class="stat-row"><span>Tamanho estimado</span><b id="sumSize">—</b></div>
           </div>
           <button class="btn-primary btn-lg" id="dlBtn"><i data-icon="download"></i>Baixar imagem</button>
@@ -851,7 +861,7 @@ const RATIOS = [
 ];
 const PCTS = [25, 50, 75, 100, 150, 200];
 const PRESETS = [['4K UHD', 3840], ['2K QHD', 2560], ['Full HD', 1920], ['HD', 1280], ['Social', 1080], ['Web', 800]];
-const QPRESETS = [['Web', 70], ['Alta', 85], ['Máxima', 100]];
+const QPRESETS = [['Econômico', 70], ['Padrão', 90], ['Alta', 95], ['Máxima', 100]];
 
 const FORMATS = [
   { id: 'jpeg', label: 'JPEG', ext: 'jpg', mime: 'image/jpeg', desc: 'Fotos · arquivos menores', lossy: true },
@@ -1489,7 +1499,12 @@ function scheduleEstimate() {
       const { w, h } = outputSize();
       const blob = await exportBlob({ busy: w * h > 6e6 });
       estKey = key;
-      $('#sumSize').textContent = '≈ ' + fmtBytes(blob.size);
+      let txt = '≈ ' + fmtBytes(blob.size);
+      if (S.fileSize) {
+        const d = Math.round((blob.size / S.fileSize - 1) * 100);
+        txt += ` (${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)}%)`;
+      }
+      $('#sumSize').textContent = txt;
     } catch { $('#sumSize').textContent = '—'; }
   }, 450);
 }
@@ -1648,7 +1663,9 @@ function buildFormats() {
       <div><b>${f.label}</b><small>${SUPPORTED[f.id] ? f.desc : 'Não suportado neste navegador'}</small></div>
       <em>.${f.ext}</em>
     </button>`).join('');
-  $('#qChips').innerHTML = QPRESETS.map(([n, q]) => `<button class="chip" data-q="${q}">${n}<small>${q}%</small></button>`).join('');
+  const qChips = QPRESETS.map(([n, q]) => `<button class="chip" data-q="${q}">${n}<small>${q}%</small></button>`).join('');
+  $('#qChips').innerHTML = qChips;
+  $('#sqChips').innerHTML = qChips;
 }
 
 /* ======================================================================
@@ -1719,14 +1736,17 @@ function syncResolution() {
 function syncFormat() {
   const o = S.params.output, f = fmtById(o.format);
   for (const b of $$('.fmt')) b.classList.toggle('active', b.dataset.fmt === o.format);
-  const q = $('#quality');
-  q.value = o.quality; setFill(q); q.disabled = !f.lossy;
+  // Qualidade: mesmo valor nos painéis Formato e Salvar
+  for (const q of [$('#quality'), $('#saveQuality')]) { q.value = o.quality; setFill(q); q.disabled = !f.lossy; }
   $('#qualityCard').classList.toggle('disabled', !f.lossy);
-  $('#qOut').textContent = f.lossy ? o.quality : '—';
-  for (const c of $$('#qChips .chip')) { c.classList.toggle('active', f.lossy && o.quality === +c.dataset.q); c.disabled = !f.lossy; }
+  $('#saveQCard').classList.toggle('disabled', !f.lossy);
+  $('#sqNote').hidden = f.lossy;
+  $('#qOut').textContent = $('#sqOut').textContent = f.lossy ? o.quality : '—';
+  for (const c of $$('#qChips .chip, #sqChips .chip')) { c.classList.toggle('active', f.lossy && o.quality === +c.dataset.q); c.disabled = !f.lossy; }
   $('#bgCard').hidden = o.format !== 'jpeg';
   $('#bgColor').value = o.bg;
   updateResets($('[data-panel="format"]'));
+  updateResets($('[data-panel="save"]'));
 }
 function syncSave() {
   const o = S.params.output, f = fmtById(o.format);
@@ -1735,8 +1755,8 @@ function syncSave() {
   if (!S.img) return;
   const { w, h } = outputSize();
   $('#sumDims').textContent = `${fmtInt(w)} × ${fmtInt(h)} px`;
-  $('#sumFmt').textContent = f.label;
-  $('#sumQ').textContent = f.lossy ? o.quality + '%' : 'Sem perdas';
+  $('#sumFmt').textContent = `${f.label} · ${f.lossy ? o.quality + '%' : 'sem perdas'}`;
+  $('#sumOrig').textContent = S.fileSize ? fmtBytes(S.fileSize) : '—';
   $('#saveAsBtn').disabled = false;
 }
 function updateFoot() {
@@ -2140,13 +2160,19 @@ function bindEvents() {
     const b = e.target.closest('[data-fmt]'); if (!b || b.disabled) return;
     S.params.output.format = b.dataset.fmt; commit(); syncUI();
   });
-  const q = $('#quality');
-  q.addEventListener('input', () => { S.params.output.quality = +q.value; setFill(q); $('#qOut').textContent = q.value; updateFoot(); });
-  q.addEventListener('change', () => { commit(); syncUI(); });
-  $('#qChips').addEventListener('click', e => {
-    const b = e.target.closest('[data-q]'); if (!b) return;
-    S.params.output.quality = +b.dataset.q; commit(); syncUI();
-  });
+  for (const q of [$('#quality'), $('#saveQuality')]) {
+    q.addEventListener('input', () => {
+      S.params.output.quality = +q.value; setFill(q);
+      $('#qOut').textContent = $('#sqOut').textContent = q.value; updateFoot();
+    });
+    q.addEventListener('change', () => { commit(); syncUI(); });
+  }
+  for (const box of [$('#qChips'), $('#sqChips')]) {
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-q]'); if (!b || b.disabled) return;
+      S.params.output.quality = +b.dataset.q; commit(); syncUI();
+    });
+  }
   $('#bgColor').addEventListener('input', e => { S.params.output.bg = e.target.value; });
   $('#bgColor').addEventListener('change', commit);
 
