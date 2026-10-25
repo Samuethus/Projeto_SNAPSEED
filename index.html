@@ -271,6 +271,20 @@ body.no-image .panel-body { opacity: .45; pointer-events: none; }
 .sl-top { display: flex; justify-content: space-between; align-items: baseline; color: #e4e7ee; font-size: 13px; }
 .sl-top output { color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
 .sl.changed .sl-top output { color: var(--royal-light); font-weight: 600; }
+.sl-val { display: inline-flex; align-items: center; gap: 2px; }
+.rst {
+  width: 22px; height: 22px; border-radius: 6px; display: inline-grid; place-items: center;
+  color: var(--text-2); transition: background .15s, color .15s, opacity .15s;
+}
+.rst svg { width: 13px; height: 13px; }
+.rst:hover:not(:disabled) { color: #fff; background: var(--surface-3); }
+.rst:disabled { opacity: .22; cursor: default; }
+.sl-track { position: relative; }
+.sl-track.bipolar::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 10px; border-radius: 1px;
+  transform: translate(-50%, -50%); background: #5d6577; pointer-events: none; transition: background .15s;
+}
+.sl-track.snapped::before { background: var(--royal-light); }
 input[type=range] {
   -webkit-appearance: none; appearance: none; width: 100%; height: 24px; margin: 0;
   background: transparent; cursor: pointer; display: block;
@@ -547,8 +561,10 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
           <div class="card">
             <div class="card-head"><h3>Filtros</h3><span class="ic-circle"><i data-icon="wand"></i></span></div>
             <div class="filters" id="filters"></div>
-            <div class="sl" style="margin-top:10px">
-              <div class="sl-top"><label for="filterAmount">intensidade</label><output id="filterAmountOut">100</output></div>
+            <div class="sl" data-range-row style="margin-top:10px">
+              <div class="sl-top"><label for="filterAmount">intensidade</label>
+                <span class="sl-val"><output id="filterAmountOut">100</output><button class="rst" data-default="100" title="Redefinir intensidade" aria-label="Redefinir intensidade"><i data-icon="reset"></i></button></span>
+              </div>
               <input type="range" class="fill" id="filterAmount" min="0" max="100" step="1" value="100">
             </div>
           </div>
@@ -583,9 +599,11 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
               <button class="tile" data-flip="v" id="flipVBtn"><i data-icon="flipV"></i><span>Espelhar vertical</span></button>
             </div>
           </div>
-          <div class="card">
-            <div class="card-head"><h3>Endireitar</h3><output id="angleOut">0,0°</output></div>
-            <input type="range" id="angle" min="-45" max="45" step="0.1" value="0">
+          <div class="card" data-range-row>
+            <div class="card-head"><h3>Endireitar</h3>
+              <span class="sl-val"><output id="angleOut">0,0°</output><button class="rst" data-default="0" title="Redefinir endireitamento" aria-label="Redefinir endireitamento"><i data-icon="reset"></i></button></span>
+            </div>
+            <div class="sl-track bipolar"><input type="range" id="angle" min="-45" max="45" step="0.1" value="0" data-snap="0.8"></div>
             <div class="ruler"><span>-45°</span><span>0°</span><span>+45°</span></div>
             <div class="btn-row" style="margin-top:10px">
               <button class="btn-outline sm" data-angle-step="-0.5">−0,5°</button>
@@ -633,8 +651,10 @@ input[type=color]::-webkit-color-swatch { border: 0; border-radius: 5px; }
         <!-- Formato -->
         <section class="pane" data-panel="format">
           <div class="fmt-list" id="fmtList"></div>
-          <div class="card" id="qualityCard">
-            <div class="card-head"><h3>Qualidade</h3><output id="qOut">90</output></div>
+          <div class="card" id="qualityCard" data-range-row>
+            <div class="card-head"><h3>Qualidade</h3>
+              <span class="sl-val"><output id="qOut">90</output><button class="rst" data-default="90" title="Redefinir qualidade" aria-label="Redefinir qualidade"><i data-icon="reset"></i></button></span>
+            </div>
             <input type="range" class="fill" id="quality" min="10" max="100" step="1" value="90">
             <div class="chips cols-3" id="qChips" style="margin-top:8px"></div>
           </div>
@@ -1577,9 +1597,12 @@ function buildTools() {
 }
 function sliderHTML(gid, it) {
   const track = it.track ? ` style="--track:${it.track}"` : '';
-  return `<div class="sl" data-group="${gid}" data-key="${it.k}">
-    <div class="sl-top"><label for="sl-${gid}-${it.k}">${it.label}</label><output>0</output></div>
-    <input type="range" id="sl-${gid}-${it.k}" min="${it.min}" max="${it.max}" step="1" value="0"${track}>
+  const bipolar = it.min < 0;
+  return `<div class="sl" data-range-row data-group="${gid}" data-key="${it.k}">
+    <div class="sl-top"><label for="sl-${gid}-${it.k}">${it.label}</label>
+      <span class="sl-val"><output>0</output><button class="rst" data-default="0" title="Redefinir ${it.label}" aria-label="Redefinir ${it.label}">${icon('reset')}</button></span>
+    </div>
+    <div class="sl-track${bipolar ? ' bipolar' : ''}"><input type="range" id="sl-${gid}-${it.k}" min="${it.min}" max="${it.max}" step="1" value="0"${bipolar ? ' data-snap="4"' : ''}${track}></div>
   </div>`;
 }
 function buildAdjust() {
@@ -1640,6 +1663,7 @@ function syncSliders() {
     b.classList.toggle('mod', Object.values(S.params[gid]).some(v => v !== 0));
   }
   for (const c of $$('.adj-card')) c.classList.toggle('active', c.dataset.card === S.adjGroup);
+  updateResets($('#adjCards'));
 }
 function syncEdit() {
   for (const b of $$('.fl')) b.classList.toggle('active', b.dataset.filter === S.params.filter.id);
@@ -1647,6 +1671,7 @@ function syncEdit() {
   amt.value = S.params.filter.amount; setFill(amt);
   amt.disabled = S.params.filter.id === 'none';
   $('#filterAmountOut').textContent = S.params.filter.amount;
+  updateResets($('[data-panel="edit"]'));
 }
 function syncCropPanel() {
   for (const b of $$('.ratio')) b.classList.toggle('active', b.dataset.ratio === S.params.geom.ratio);
@@ -1661,6 +1686,7 @@ function syncRotate() {
   $('#rotInfo').textContent = g.rot + '°';
   $('#flipInfo').textContent = g.flipH && g.flipV ? 'Horizontal e vertical' : g.flipH ? 'Horizontal' : g.flipV ? 'Vertical' : 'Nenhum';
   if (S.img) { const [cw, ch] = cropPx(); $('#rotDims').textContent = `${fmtInt(cw)} × ${fmtInt(ch)} px`; }
+  updateResets($('[data-panel="rotate"]'));
 }
 function ratioLabel(w, h) {
   const d = gcd(w, h), a = w / d, b = h / d;
@@ -1693,6 +1719,7 @@ function syncFormat() {
   for (const c of $$('#qChips .chip')) { c.classList.toggle('active', f.lossy && o.quality === +c.dataset.q); c.disabled = !f.lossy; }
   $('#bgCard').hidden = o.format !== 'jpeg';
   $('#bgColor').value = o.bg;
+  updateResets($('[data-panel="format"]'));
 }
 function syncSave() {
   const o = S.params.output, f = fmtById(o.format);
@@ -1747,6 +1774,7 @@ function syncUI() {
   syncTool(); syncSliders(); syncEdit(); syncCropPanel(); syncRotate();
   syncResolution(); syncFormat(); syncSave(); updateFoot(); updateInfo();
   updateHistoryBtns(); updateToolDots();
+  updateResets();
   $('#handBtn').classList.toggle('on', S.hand);
   stage.classList.toggle('can-pan', !!S.img && (S.hand || S.spaceHand || S.tool !== 'crop'));
 }
@@ -1858,7 +1886,52 @@ function setCompare(on) {
 /* ======================================================================
    Eventos
    ====================================================================== */
+// Trava em zero (detent): ao arrastar, valores próximos de zero "grudam" no zero.
+// Só vale para o arraste com mouse/toque — as setas do teclado continuam passo a passo.
+function bindSliderHelpers() {
+  let dragging = null;
+  document.addEventListener('pointerdown', e => {
+    if (e.target.matches('input[type=range][data-snap]')) dragging = e.target;
+  });
+  const release = () => {
+    if (!dragging) return;
+    dragging.parentElement.classList.remove('snapped');
+    dragging = null;
+  };
+  window.addEventListener('pointerup', release);
+  window.addEventListener('pointercancel', release);
+  window.addEventListener('input', e => {
+    const el = e.target;
+    if (el !== dragging) return;
+    const snap = +el.dataset.snap, v = +el.value;
+    if (v !== 0 && Math.abs(v) <= snap) el.value = 0;
+    el.parentElement.classList.toggle('snapped', +el.value === 0);
+  }, true);
+
+  // Botão de redefinir de cada controle: volta ao padrão e dispara os mesmos eventos do arraste
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('.rst');
+    if (!btn || btn.disabled) return;
+    const input = btn.closest('[data-range-row]').querySelector('input[type=range]');
+    input.value = btn.dataset.default;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    updateResets();
+  });
+  document.addEventListener('input', e => {
+    const row = e.target.closest && e.target.closest('[data-range-row]');
+    if (row) updateResets(row);
+  });
+}
+function updateResets(root = document) {
+  for (const btn of $$('.rst', root)) {
+    const input = btn.closest('[data-range-row]').querySelector('input[type=range]');
+    btn.disabled = !S.img || input.disabled || Math.abs(+input.value - +btn.dataset.default) < 1e-9;
+  }
+}
+
 function bindEvents() {
+  bindSliderHelpers();
   const fileInput = $('#fileInput'), presetInput = $('#presetInput');
   const openPicker = () => { fileInput.value = ''; fileInput.click(); };
   fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));

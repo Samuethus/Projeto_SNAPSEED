@@ -12,6 +12,9 @@ Edição de imagem ; Recorte de image ; Girar imagem ; ajustes de qualidade ; co
 ESTILO
 Dark premium ; blue royal
 
+PERMISSOES
+{"permissions": {"allow": ["Bash","PowerShell","Read","Edit","Write","Glob","Grep","WebFetch","WebSearch"]}}
+
 REGRAS DE TRABALHO
 Commit e push serão automáticos ; após cada ajuste em arquivos, fazer commit e push para o repositório remoto (origin)
 Sempre que ajustes em arquivos forem realizados, listar os arquivos alterados e apresentar link de redirecionamento para cada arquivo
